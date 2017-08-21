@@ -1,0 +1,11 @@
+{
+  "name": "erp5_officejs_fs2erp5_gadget",
+  "scopes": [
+    {
+      "prefix": "fs2erp5",
+      "paths": [
+        ""
+      ]
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+---
+---
+CACHE MANIFEST
+CACHE:
+{% assign s_files = site.static_files | where_exp: "file", "file.exclude != true"  %}{% for file in s_files %}{{ file.path | remove_first: "/"}}
+{% endfor %}
