@@ -1,11 +1,10 @@
-/*globals window, RSVP, rJS, loopEventListener, URL, document
+/*globals window, RSVP, rJS, loopEventListener, URL, URI, document
  FileReader, console, navigator, jIO */
 /*jslint indent: 2, nomen: true, maxlen: 80*/
-(function (window, navigator, RSVP, rJS, jIO, URL) {
+(function (window, navigator, RSVP, rJS, jIO, URL, URI) {
 	"use strict";
 
-	var origin_url = (window.location.origin + window.location.pathname)
-		.replace("officejs_fs2erp5_gadget/", "");
+	var origin_url = URI("..").absoluteTo(window.location.href);
 			// application_list = [
 			// 	"officejs_fs2erp5_gadget",
 			//
@@ -146,4 +145,4 @@
 				});
 		});
 
-}(window, navigator, RSVP, rJS, jIO, URL));
+}(window, navigator, RSVP, rJS, jIO, URL, URI));
