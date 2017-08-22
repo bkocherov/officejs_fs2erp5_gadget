@@ -68,7 +68,12 @@
       .push(function (result) {
         var id, path, last_index, filename, filename_xml, ext, new_id, i;
         for (id in result) {
-	        if (result.hasOwnProperty(id) && !id.startsWith("http")) {
+	        if (
+	        	result.hasOwnProperty(id) &&
+		        !id.startsWith("http") &&
+		        !id.startsWith("/erp5_/") && //rmove meta of package
+		        !id.startsWith("/assets/") // remove github added assets
+	        ) {
             last_index = id.lastIndexOf("/") + 1;
             if (last_index === id.length) {
               path = id || "/";
@@ -97,8 +102,10 @@
 		            }
 	            }
             }
-		        filename = new_id.split("/").join("_").split(".").join("_") + '.' + ext;
-		        filename_xml = new_id.split("/").join("_").split(".").join("_") + '.xml';
+		        filename = new_id.split("/")
+				        .join("_").split(".").join("_") + '.' + ext;
+		        filename_xml = new_id.split("/")
+				        .join("_").split(".").join("_") + '.xml';
             if (!context._id_dict.hasOwnProperty(path)) {
               context._id_dict[path] = {};
             }
