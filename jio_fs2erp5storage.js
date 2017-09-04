@@ -1,7 +1,112 @@
 /*jslint indent:2, maxlen: 80, nomen: true */
-/*global jIO, RSVP, window, console, Blob */
-(function (window, jIO, RSVP, console, Blob) {
+/*global jIO, RSVP, window, console, Blob,
+ jstoxml, base64js */
+(function (window, jIO, RSVP, console, Blob, jstoxml, base64js) {
   "use strict";
+
+  function string2blob(s) {
+    var l = s.length,
+      array = new Uint8Array(l);
+    for (var i = 0; i < l; i++) {
+      array[i] = s.charCodeAt(i);
+    }
+    return new Blob([array], {type: 'application/octet-stream'});
+  }
+
+  function generateZopeData(obj) {
+    var records = [];
+
+    function pickle(obj) {
+      var type = typeof obj,
+        items = [];
+      if (Array.isArray(obj)) {
+        type = 'array';
+      }
+      switch (type) {
+        case "string":
+          // TODO cdata fix
+          obj = obj
+            .replace(/\r\n/g, '\\r\\n')
+            .replace(/\n/g, '\\n')
+            .replace(/\\n/g, '\\n\n');
+          // .replace(/</g, '&lt;')
+          // .replace(/>/g, '&gt;')
+          // .replace(/&/g, '&amp;')
+          // .replace(/"/g, '&quot;')
+          // .replace(/'/g, '&apos;');
+          return {string: obj};
+        case "array":
+          for (var i = 0; i < obj.length; i += 1) {
+            items.push(pickle(obj[i]));
+          }
+          return {tuple: items};
+        // case "function": return obj.name || obj.toString();
+        case "object":
+          for (var key in obj) {
+
+            if (obj.hasOwnProperty(key)) {
+              items.push({
+                item: {
+                  key: {
+                    string: key
+                  },
+                  value: pickle(obj[key])
+                }
+              });
+            }
+          }
+          return {dictionary: items};
+        default:
+          return obj.toString();
+      }
+
+    }
+
+    function longToByteArray(/*long*/long) {
+      // we want to represent the input as a 8-bytes array
+      var byteArray = [0, 0, 0, 0, 0, 0, 0, 0];
+
+      for (var index = byteArray.length - 1; index !== 0; index--) {
+        var byte;
+        /* jshint -W016 */
+        byte = long & 0xff;
+        byteArray[index] = byte;
+        long = (long - byte) / 256;
+      }
+
+      return byteArray;
+    }
+
+    function add_record(name, module, obj) {
+      var id = records.length + 1;
+      records.push({
+        _name: "record",
+        _attrs: {
+          id: id,
+          aka: base64js.fromByteArray(longToByteArray(id))
+        },
+        _content: [
+          {
+            pickle: {
+              _name: "global",
+              _attrs: {
+                name: name,
+                module: module
+              }
+            }
+          },
+          {
+            pickle: pickle(obj)
+          }
+        ]
+      });
+    }
+
+    add_record(obj.portal_type, "erp5.portal_type", obj);
+    return jstoxml.toXML({
+      ZopeData: records
+    }, {header: true, indent: '  '});
+  }
 
   function Fs2Erp5Storage(spec) {
     this._document = spec.document;
@@ -19,11 +124,34 @@
   };
 
   Fs2Erp5Storage.prototype.getAttachment = function (doc_id, attachment_id) {
-	  // doc_id + ((attachment_id === "index.html") ?
-    //  (doc_id.endsWith("imagelib/") ? "index.html" : "") : attachment_id)
-    return this._sub_storage.getAttachment(
-      this._document, this._id_dict[doc_id][attachment_id]
-    );
+    var obj = this._id_dict[doc_id][attachment_id],
+      type = typeof obj;
+    if (obj instanceof Blob) {
+      type = "blob";
+    }
+    switch (type) {
+      // case "undefined":
+      //   return new Blob();
+      case "blob":
+        return obj;
+      case "object":
+        if (obj.text_content) {
+          return this._sub_storage.getAttachment(this._document,
+            obj.text_content)
+            .push(function (blob) {
+              return jIO.util.readBlobAsText(blob);
+            })
+            .push(function (evt) {
+              obj.text_content = evt.target.result;
+              return string2blob(generateZopeData(obj));
+            });
+        } else {
+          return string2blob(generateZopeData(obj));
+        }
+        break;
+      default:
+        return this._sub_storage.getAttachment(this._document, obj);
+    }
   };
 
   Fs2Erp5Storage.prototype.allAttachments = function (doc_id) {
@@ -31,13 +159,13 @@
   };
 
   Fs2Erp5Storage.prototype.buildQuery = function (options) {
-	  var id, result = [], context = this;
-	  for (id in context._id_dict) {
-		  if (context._id_dict.hasOwnProperty(id)) {
-			  result.push({id: id});
-		  }
-	  }
-	  return result;
+    var id, result = [], context = this;
+    for (id in context._id_dict) {
+      if (context._id_dict.hasOwnProperty(id)) {
+        result.push({id: id});
+      }
+    }
+    return result;
   };
 
   Fs2Erp5Storage.prototype.repair = function () {
@@ -45,35 +173,75 @@
     var context = this;
     return context._sub_storage.repair()
       .push(function () {
-	      return jIO.util.ajax({
-		      type: "GET",
-		      dataType: "json",
-		      url: context._document + "erp5_/erp5.json"
-	      });
+        return jIO.util.ajax({
+          type: "GET",
+          dataType: "json",
+          url: context._document + "erp5_/erp5.json"
+        });
       })
-	    .push(function (response) {
-	    	var scopes, i, x, scope;
-		    context._options = response.target.response;
-		    scopes = context._options.scopes;
-		    for (i = 0; i < scopes.length; i += 1) {
-		    	scope = scopes[i];
-		    	for (x = 0; x < scope.paths.length; x += 1) {
-				    context._paths[scope.paths[x]] = scope;
-			    }
-		    }
-	    })
+      .push(function (response) {
+        var scopes, i, x, scope, bt_folder = {}, size= 0;
+
+        context._id_dict["/bt/"] = bt_folder;
+
+        function add_metafile(fname, body) {
+          var type = typeof body,
+            new_body;
+          if (Array.isArray(body)) {
+            type = 'array';
+          }
+          switch (type) {
+            case "undefined":
+              return;
+            case "array":
+              new_body = body.join("\n");
+              break;
+            // case "object":
+            //   break;
+            default:
+              new_body = body;
+          }
+          bt_folder[fname] = string2blob(new_body);
+        }
+
+        context._options = response.target.response;
+        context._options.id_prefix = context._options.id_prefix || "";
+        context._options.version = context._options.version || "001";
+        context._path_templates = {};
+        scopes = context._options.scopes || {};
+        for (i = 0; i < scopes.length; i += 1) {
+          size++;
+          scope = scopes[i];
+          for (x = 0; x < scope.paths.length; x += 1) {
+            context._paths[scope.paths[x]] = scope;
+          }
+          context._path_templates[context._options.id_prefix +
+          scope.prefix.split("/").join("_").split(".").join("_") + "*"] = 1;
+        }
+        if (size === 0) {
+          context._path_templates[context._options.id_prefix + "*"] = 1;
+        }
+        add_metafile("title", context._options.name);
+        add_metafile("version", context._options.version);
+        add_metafile("description", context._options.description);
+        add_metafile("copyright_list", context._options.authors);
+        add_metafile("license", context._options.license);
+      })
       .push(function () {
         return context._sub_storage.allAttachments(context._document);
       })
       .push(function (result) {
-        var id, path, last_index, filename, filename_xml, ext, new_id, i;
+        var id, path, last_index, filename, ext, i, size,
+          xmldoc = {}, bt_links = {}, path_templates = [],
+          generated_appcache = [];
         for (id in result) {
-	        if (
-	        	result.hasOwnProperty(id) &&
-		        !id.startsWith("http") &&
-		        !id.startsWith("/erp5_/") && //rmove meta of package
-		        !id.startsWith("/assets/") // remove github added assets
-	        ) {
+          if (
+            result.hasOwnProperty(id) &&
+            id !== "/" &&
+            !id.startsWith("http") &&
+            !id.startsWith("erp5_/") && //rmove meta of package
+            !id.startsWith("assets/") // remove github added assets
+          ) {
             last_index = id.lastIndexOf("/") + 1;
             if (last_index === id.length) {
               path = id || "/";
@@ -82,39 +250,113 @@
               path = id.substring(0, last_index);
               filename = id.substring(last_index);
             }
-            new_id = path + filename;
+            xmldoc = {
+              version: context._options.version
+            };
+            path = path + filename;
+            size = 0;
+            for (i in context._paths) {
+              if (context._paths.hasOwnProperty(i)) {
+                size++;
+                if (path.startsWith(i)) {
+                  if (context._paths[i].prefix) {
+                    path = context._paths[i].prefix + path;
+                  }
+                  xmldoc.default_reference = path;
+                  break;
+                }
+              }
+            }
+            if (size > 0 && !xmldoc.default_reference) {
+              continue;
+            } else {
+              xmldoc.default_reference = path;
+            }
+            if (!context._options.id_prefix && path === "index.html") {
+              continue;
+            }
+            xmldoc.id = context._options.id_prefix + path;
+            xmldoc.id = xmldoc.id.split("/").join("_").split(".").join("_");
+
             ext = filename.substring(filename.lastIndexOf('.') + 1);
+            // TODO: all filetype support
             switch (ext) {
-	            case "js":
-		            path = "/PathTemplateItem/web_page_module/";
-		            break;
-	            case "ttf":
-		            path = "/PathTemplateItem/document_module/";
-		            ext = "bin";
-		            break;
+              case "template":
+              case "html":
+                path = "web_page_module";
+                xmldoc.portal_type = "Web Page";
+                xmldoc.content_type = "text/html";
+                break;
+              case "js":
+                path = "web_page_module";
+                xmldoc.portal_type = "Web Script";
+                xmldoc.content_type = "text/javascript";
+                break;
+              case "appcache":
+                path = "web_page_module";
+                xmldoc.portal_type = "Web Manifest";
+                xmldoc.content_type = "application/json";
+                xmldoc.text_content = id;
+                break;
+              case "gif":
+              case "jpg":
+                path = "image_module";
+                xmldoc.portal_type = "Image";
+                xmldoc.title = filename;
+                xmldoc.filename = filename;
+                xmldoc.content_type = "image/" + ext;
+                break;
+              case "json":
+                xmldoc.portal_type = "File";
+                xmldoc.content_type = "application/json";
+                break;
+              case "ttf":
+                xmldoc.portal_type = "File";
+                xmldoc.content_type = "font/truetype";
+                break;
               default:
                 continue;
             }
-            for (i in context._paths) {
-            	if (new_id.startsWith(i)) {
-            		if (context._paths[i].prefix) {
-            			new_id = context._paths[i].prefix + "/" + new_id;
-		            }
-	            }
+            if (xmldoc.portal_type === "File") {
+              path = "document_module";
+              xmldoc.title = filename;
             }
-		        filename = new_id.split("/")
-				        .join("_").split(".").join("_") + '.' + ext;
-		        filename_xml = new_id.split("/")
-				        .join("_").split(".").join("_") + '.xml';
+            if (!bt_links.hasOwnProperty(path)) {
+              bt_links[path] = 1;
+              for (i in context._path_templates) {
+                if (context._path_templates.hasOwnProperty(i)) {
+                  path_templates.push(path + '/' + i);
+                }
+              }
+            }
+            path = "/PathTemplateItem/" + path + "/";
             if (!context._id_dict.hasOwnProperty(path)) {
               context._id_dict[path] = {};
             }
-		        context._id_dict[path][filename] = id;
-		        context._id_dict[path][filename_xml] = id;
+            if (!xmldoc.text_content) {
+              context._id_dict[path][xmldoc.id + '.' + ext] = id;
+            }
+            generated_appcache.push(xmldoc.default_reference);
+            context._id_dict[path][xmldoc.id + '.xml'] = xmldoc;
           }
         }
+        context._id_dict["/bt/"].template_path_list =
+          string2blob(path_templates.join("\n"));
+
+        // generate appcache as list of all packaged files
+        xmldoc = {
+          version: context._options.version,
+          id: context._options.id_prefix + context._options.name + "_appcache",
+          default_reference: "",
+          portal_type: "Web Manifest",
+          content_type: "application/json",
+          text_content: "CACHE MANIFEST\nCACHE:\n" +
+          generated_appcache.join("\n") + "\nNETWORK:\n*"
+        };
+        context._id_dict["/PathTemplateItem/web_page_module/"]
+          [xmldoc.id + ".appcache"] = string2blob(generateZopeData(xmldoc));
       });
   };
 
   jIO.addStorage('fs2erp5', Fs2Erp5Storage);
-}(window, jIO, RSVP, console, Blob));
+}(window, jIO, RSVP, console, Blob, jstoxml, base64js));

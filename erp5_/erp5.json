@@ -1,11 +1,10 @@
 {
   "name": "erp5_officejs_fs2erp5_gadget",
-  "scopes": [
-    {
-      "prefix": "fs2erp5",
-      "paths": [
-        ""
-      ]
-    }
-  ]
+  "description": "RenderJs gadget allow export github published repos as bt for import in erp5.",
+  "version": "001",
+  "authors": [
+    "Copyright (c) 2017 Nexedi SA"
+  ],
+  "license": "LGPL3",
+  "id_prefix": "fs2erp5_"
 }
