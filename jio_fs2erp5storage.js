@@ -180,8 +180,8 @@
         });
       })
       .push(function (response) {
-        var scopes, i, x, scope, bt_folder = {}, size= 0;
-
+        var scopes, i, x, scope, bt_folder = {}, size = 0,
+          path;
 
         function add_metafile(fname, body) {
           var type = typeof body,
@@ -216,10 +216,12 @@
           size++;
           scope = scopes[i];
           for (x = 0; x < scope.paths.length; x += 1) {
-            context._paths[scope.paths[x]] = scope;
+            path = scope.paths[x];
+            context._paths[path] = scope;
+            path = scope.prefix + path;
+            context._path_templates[context._options.id_prefix +
+            path.split("/").join("_").split(".").join("_") + "*"] = 1;
           }
-          context._path_templates[context._options.id_prefix +
-          scope.prefix.split("/").join("_").split(".").join("_") + "*"] = 1;
         }
         if (size === 0) {
           context._path_templates[context._options.id_prefix + "*"] = 1;
