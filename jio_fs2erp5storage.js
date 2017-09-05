@@ -182,7 +182,6 @@
       .push(function (response) {
         var scopes, i, x, scope, bt_folder = {}, size= 0;
 
-        context._id_dict["/bt/"] = bt_folder;
 
         function add_metafile(fname, body) {
           var type = typeof body,
@@ -207,6 +206,10 @@
         context._options = response.target.response;
         context._options.id_prefix = context._options.id_prefix || "";
         context._options.version = context._options.version || "001";
+        context.path_prefix_meta = '/' + context._options.name + '/bt/';
+        context.path_prefix_file = '/' + context._options.name +
+          '/PathTemplateItem/';
+        context._id_dict[context.path_prefix_meta] = bt_folder;
         context._path_templates = {};
         scopes = context._options.scopes || {};
         for (i = 0; i < scopes.length; i += 1) {
@@ -329,7 +332,7 @@
                 }
               }
             }
-            path = "/PathTemplateItem/" + path + "/";
+            path = context.path_prefix_file + path + "/";
             if (!context._id_dict.hasOwnProperty(path)) {
               context._id_dict[path] = {};
             }
@@ -340,7 +343,7 @@
             context._id_dict[path][xmldoc.id + '.xml'] = xmldoc;
           }
         }
-        context._id_dict["/bt/"].template_path_list =
+        context._id_dict[context.path_prefix_meta].template_path_list =
           string2blob(path_templates.join("\n"));
 
         // generate appcache as list of all packaged files
@@ -353,8 +356,8 @@
           text_content: "CACHE MANIFEST\nCACHE:\n" +
           generated_appcache.join("\n") + "\nNETWORK:\n*"
         };
-        context._id_dict["/PathTemplateItem/web_page_module/"]
-          [xmldoc.id + ".appcache"] = string2blob(generateZopeData(xmldoc));
+        context._id_dict[context.path_prefix_file + "web_page_module/"]
+          [xmldoc.id + ".xml"] = string2blob(generateZopeData(xmldoc));
       });
   };
 
