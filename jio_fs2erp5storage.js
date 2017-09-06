@@ -4,6 +4,8 @@
 (function (window, jIO, RSVP, console, Blob, jstoxml, base64js) {
   "use strict";
 
+  var CurrentTimestamp = new Date().getTime() / 1000;
+
   function string2blob(s) {
     var l = s.length,
       array = new Uint8Array(l);
@@ -14,15 +16,20 @@
   }
 
   function generateZopeData(obj) {
-    var records = [];
+    var records = [], records_count = 1, tasks = [];
 
     function pickle(obj) {
       var type = typeof obj,
         items = [];
+      if (obj === null) {
+        type = 'null';
+      }
       if (Array.isArray(obj)) {
         type = 'array';
       }
       switch (type) {
+        case "null":
+          return {none: ""};
         case "string":
           // TODO cdata fix
           obj = obj
@@ -40,26 +47,91 @@
             items.push(pickle(obj[i]));
           }
           return {tuple: items};
-        // case "function": return obj.name || obj.toString();
+        case "function":
+          return obj();
+        case "number":
+          return {float: obj};
         case "object":
+          if (obj.persistent) {
+            return obj;
+          }
           for (var key in obj) {
-
             if (obj.hasOwnProperty(key)) {
-              items.push({
-                item: {
-                  key: {
-                    string: key
-                  },
-                  value: pickle(obj[key])
-                }
-              });
+              if (key === "workflow_history") {
+                items.push({
+                  item: {
+                    key: {
+                      string: key
+                    },
+                    value: add_workflow_history(obj[key])
+                  }
+                });
+              } else {
+                items.push({
+                  item: {
+                    key: {
+                      string: key
+                    },
+                    value: pickle(obj[key])
+                  }
+                });
+              }
             }
           }
           return {dictionary: items};
         default:
           return obj.toString();
       }
+    }
 
+    function pickle_date(timestamp) {
+      return function () {
+        return {
+          object: [
+            {
+              klass: {
+                _name: "global",
+                _attrs: {
+                  name: "DateTime",
+                  module: "DateTime.DateTime"
+                }
+              }
+            },
+            pickle([null]),
+            {
+              state: pickle([
+                timestamp,
+                "UTC"
+              ])
+            }
+          ]
+        };
+      };
+    }
+
+    function add_workflow_history(obj) {
+      return add_record("PersistentMapping", "Persistence.mapping",
+        function () {
+          var workflows = {};
+          Object.keys(obj).forEach(function (key) {
+            if (obj.hasOwnProperty(key)) {
+              workflows[key] = add_record("WorkflowHistoryList",
+                "Products.ERP5Type.patches.WorkflowTool",
+                function () {
+                  obj[key].time = pickle_date(CurrentTimestamp);
+                  obj[key].actor = "zope";
+                  return {
+                    tuple: [
+                      pickle(null),
+                      {list: pickle(obj[key])}
+                    ]
+                  };
+                }
+              );
+            }
+          });
+          return pickle({data: workflows});
+        });
     }
 
     function longToByteArray(/*long*/long) {
@@ -78,31 +150,46 @@
     }
 
     function add_record(name, module, obj) {
-      var id = records.length + 1;
-      records.push({
-        _name: "record",
-        _attrs: {
-          id: id,
-          aka: base64js.fromByteArray(longToByteArray(id))
-        },
-        _content: [
-          {
-            pickle: {
-              _name: "global",
-              _attrs: {
-                name: name,
-                module: module
-              }
-            }
+      var id = records_count++,
+        base64 = base64js.fromByteArray(longToByteArray(id));
+      tasks.push(function () {
+        return {
+          _name: "record",
+          _attrs: {
+            id: id,
+            aka: base64
           },
-          {
-            pickle: pickle(obj)
-          }
-        ]
+          _content: [
+            {
+              pickle: {
+                _name: "global",
+                _attrs: {
+                  name: name,
+                  module: module
+                }
+              }
+            },
+            {
+              pickle: obj()
+            }
+          ]
+        };
       });
+      return {
+        persistent: {
+          _name: "string",
+          _attrs: {encoding: "base64"},
+          _content: base64
+        }
+      };
     }
 
-    add_record(obj.portal_type, "erp5.portal_type", obj);
+    add_record(obj.portal_type, "erp5.portal_type", function () {
+      return pickle(obj);
+    });
+    while (tasks.length > 0) {
+      records.push(tasks.shift()());
+    }
     return jstoxml.toXML({
       ZopeData: records
     }, {header: true, indent: '  '});
@@ -170,7 +257,8 @@
 
   Fs2Erp5Storage.prototype.repair = function () {
     // Transform id attachment ( file path ) to id list / attachments
-    var context = this;
+    var context = this,
+      bt_folder = {};
     return context._sub_storage.repair()
       .push(function () {
         return jIO.util.ajax({
@@ -180,7 +268,7 @@
         });
       })
       .push(function (response) {
-        var scopes, i, x, scope, bt_folder = {}, size = 0,
+        var scopes, i, x, scope, size = 0,
           path;
 
         function add_metafile(fname, body) {
@@ -237,8 +325,8 @@
       })
       .push(function (result) {
         var id, path, last_index, filename, ext, i, size,
-          xmldoc = {}, bt_links = {}, path_templates = [],
-          generated_appcache = [];
+          xmldoc, bt_links = {}, path_templates = [],
+          generated_appcache = [], document_publication_wfl;
         for (id in result) {
           if (
             result.hasOwnProperty(id) &&
@@ -247,6 +335,7 @@
             !id.startsWith("erp5_/") && //rmove meta of package
             !id.startsWith("assets/") // remove github added assets
           ) {
+            xmldoc = {};
             last_index = id.lastIndexOf("/") + 1;
             if (last_index === id.length) {
               path = id || "/";
@@ -255,8 +344,13 @@
               path = id.substring(0, last_index);
               filename = id.substring(last_index);
             }
-            xmldoc = {
-              version: context._options.version
+            xmldoc.version = context._options.version;
+            document_publication_wfl = {
+              action: "publish_alive",
+              validation_state: "published_alive"
+            };
+            xmldoc.workflow_history = {
+              document_publication_workflow: document_publication_wfl
             };
             path = path + filename;
             size = 0;
@@ -310,6 +404,8 @@
                 xmldoc.title = filename;
                 xmldoc.filename = filename;
                 xmldoc.content_type = "image/" + ext;
+                document_publication_wfl.action = "publish";
+                document_publication_wfl.validation_state = "published";
                 break;
               case "json":
                 xmldoc.portal_type = "File";
@@ -325,6 +421,8 @@
             if (xmldoc.portal_type === "File") {
               path = "document_module";
               xmldoc.title = filename;
+              document_publication_wfl.action = "publish";
+              document_publication_wfl.validation_state = "published";
             }
             if (!bt_links.hasOwnProperty(path)) {
               bt_links[path] = 1;
@@ -345,8 +443,11 @@
             context._id_dict[path][xmldoc.id + '.xml'] = xmldoc;
           }
         }
-        context._id_dict[context.path_prefix_meta].template_path_list =
-          string2blob(path_templates.join("\n"));
+        path_templates = string2blob(path_templates.join("\n"));
+        bt_folder.template_path_list = path_templates;
+        bt_folder.template_keep_workflow_path_list = path_templates;
+        bt_folder.template_keep_last_workflow_history_only_path_list =
+          path_templates;
 
         // generate appcache as list of all packaged files
         xmldoc = {
@@ -355,6 +456,12 @@
           default_reference: "",
           portal_type: "Web Manifest",
           content_type: "application/json",
+          workflow_history: {
+            document_publication_workflow: {
+              action: "publish_alive",
+              validation_state: "published_alive"
+            }
+          },
           text_content: "CACHE MANIFEST\nCACHE:\n" +
           generated_appcache.join("\n") + "\nNETWORK:\n*"
         };
