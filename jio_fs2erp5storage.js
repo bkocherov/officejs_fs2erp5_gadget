@@ -382,6 +382,7 @@
             switch (ext) {
               case "template":
               case "html":
+              case "htm":
                 path = "web_page_module";
                 xmldoc.portal_type = "Web Page";
                 xmldoc.content_type = "text/html";
@@ -391,12 +392,18 @@
                 xmldoc.portal_type = "Web Script";
                 xmldoc.content_type = "text/javascript";
                 break;
+              case "css":
+                path = "web_page_module";
+                xmldoc.portal_type = "Web Style";
+                xmldoc.content_type = "text/css";
+                break;
               case "appcache":
                 path = "web_page_module";
                 xmldoc.portal_type = "Web Manifest";
                 xmldoc.content_type = "application/json";
                 xmldoc.text_content = id;
                 break;
+              case "png":
               case "gif":
               case "jpg":
                 path = "image_module";
