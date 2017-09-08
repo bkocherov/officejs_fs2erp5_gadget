@@ -298,7 +298,7 @@
         context.path_prefix_file = '/' + context._options.name +
           '/PathTemplateItem/';
         context._id_dict[context.path_prefix_meta] = bt_folder;
-        context._path_templates = {};
+        context._template_path_list = {};
         scopes = context._options.scopes || {};
         for (i = 0; i < scopes.length; i += 1) {
           size++;
@@ -306,13 +306,21 @@
           for (x = 0; x < scope.paths.length; x += 1) {
             path = scope.paths[x];
             context._paths[path] = scope;
+
+            // prepare to template_path_list generation
             path = scope.prefix + path;
-            context._path_templates[context._options.id_prefix +
-            path.split("/").join("_").split(".").join("_") + "*"] = 1;
+            if (scope.delete_path_part) {
+              path = path.replace(scope.delete_path_part, "");
+            }
+            path = path.split("/").join("_").split(".").join("_");
+            if (path[path.length-1] === "_") {
+              path = path + "*";
+            }
+            context._template_path_list[context._options.id_prefix + path] = 1;
           }
         }
         if (size === 0) {
-          context._path_templates[context._options.id_prefix + "*"] = 1;
+          context._template_path_list[context._options.id_prefix + "*"] = 1;
         }
         add_metafile("title", context._options.name);
         add_metafile("version", context._options.version);
@@ -325,7 +333,7 @@
       })
       .push(function (result) {
         var id, path, last_index, filename, ext, i, size,
-          xmldoc, bt_links = {}, path_templates = [],
+          xmldoc, bt_links = {}, template_path_list = [],
           generated_appcache = [], document_publication_wfl;
         for (id in result) {
           if (
@@ -409,26 +417,41 @@
               case "png":
               case "gif":
               case "jpg":
+              case "svg":
                 path = "image_module";
                 xmldoc.portal_type = "Image";
                 xmldoc.title = filename;
                 xmldoc.filename = filename;
-                xmldoc.content_type = "image/" + ext;
+                switch (ext) {
+                  case "svg":
+                    xmldoc.content_type = "image/svg+xml";
+                    break;
+                  default:
+                    xmldoc.content_type = "image/" + ext;
+                }
                 document_publication_wfl.action = "publish";
                 document_publication_wfl.validation_state = "published";
                 break;
               case "json":
-                xmldoc.portal_type = "File";
                 xmldoc.content_type = "application/json";
                 break;
+              case "eot":
+                xmldoc.content_type = "application/vnd.ms-fontobject";
+                break;
               case "ttf":
-                xmldoc.portal_type = "File";
                 xmldoc.content_type = "font/truetype";
+                break;
+              case "woff":
+                xmldoc.content_type = "application/x-font-woff";
+                break;
+              case "woff2":
+                xmldoc.content_type = "font/woff2";
                 break;
               default:
                 continue;
             }
-            if (xmldoc.portal_type === "File") {
+            if (!xmldoc.portal_type) {
+              xmldoc.portal_type = "File";
               path = "document_module";
               xmldoc.title = filename;
               document_publication_wfl.action = "publish";
@@ -436,9 +459,9 @@
             }
             if (!bt_links.hasOwnProperty(path)) {
               bt_links[path] = 1;
-              for (i in context._path_templates) {
-                if (context._path_templates.hasOwnProperty(i)) {
-                  path_templates.push(path + '/' + i);
+              for (i in context._template_path_list) {
+                if (context._template_path_list.hasOwnProperty(i)) {
+                  template_path_list.push(path + '/' + i);
                 }
               }
             }
@@ -453,11 +476,11 @@
             context._id_dict[path][xmldoc.id + '.xml'] = xmldoc;
           }
         }
-        path_templates = string2blob(path_templates.join("\n"));
-        bt_folder.template_path_list = path_templates;
-        bt_folder.template_keep_workflow_path_list = path_templates;
+        template_path_list = string2blob(template_path_list.join("\n"));
+        bt_folder.template_path_list = template_path_list;
+        bt_folder.template_keep_workflow_path_list = template_path_list;
         bt_folder.template_keep_last_workflow_history_only_path_list =
-          path_templates;
+          template_path_list;
 
         // generate appcache as list of all packaged files
         xmldoc = {
