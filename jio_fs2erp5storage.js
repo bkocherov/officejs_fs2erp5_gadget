@@ -358,6 +358,9 @@
               if (context._paths.hasOwnProperty(i)) {
                 size++;
                 if (path.startsWith(i)) {
+                  if (context._paths[i].delete_path_part) {
+                    path = path.replace(context._paths[i].delete_path_part, "");
+                  }
                   if (context._paths[i].prefix) {
                     path = context._paths[i].prefix + path;
                   }
