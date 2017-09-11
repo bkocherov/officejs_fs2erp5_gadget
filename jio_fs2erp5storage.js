@@ -486,7 +486,7 @@
         xmldoc = {
           version: context._options.version,
           id: context._options.id_prefix + context._options.name + "_appcache",
-          default_reference: "",
+          default_reference: context._options.name + ".appcache",
           portal_type: "Web Manifest",
           content_type: "application/json",
           workflow_history: {
