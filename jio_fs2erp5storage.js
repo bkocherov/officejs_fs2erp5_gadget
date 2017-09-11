@@ -118,7 +118,8 @@
               workflows[key] = add_record("WorkflowHistoryList",
                 "Products.ERP5Type.patches.WorkflowTool",
                 function () {
-                  obj[key].time = pickle_date(CurrentTimestamp);
+                  // it cause uncomfortable modifications on update
+                  // obj[key].time = pickle_date(CurrentTimestamp);
                   obj[key].actor = "zope";
                   return {
                     tuple: [
