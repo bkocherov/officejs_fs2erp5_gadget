@@ -185,6 +185,38 @@
       };
     }
 
+    obj._Access_contents_information_Permission = [
+      "Anonymous",
+      "Assignee",
+      "Assignor",
+      "Associate",
+      "Auditor",
+      "Manager",
+      "Owner"
+    ];
+    obj._Add_portal_content_Permission = [
+      "Assignee",
+      "Assignor",
+      "Manager"
+    ];
+    obj._Change_local_roles_Permission = [
+      "Assignor",
+      "Manager"
+    ];
+    obj._Modify_portal_content_Permission = [
+      "Assignee",
+      "Assignor",
+      "Manager"
+    ];
+    obj._View_Permission = [
+      "Anonymous",
+      "Assignee",
+      "Assignor",
+      "Associate",
+      "Auditor",
+      "Manager",
+      "Owner"
+    ];
     add_record(obj.portal_type, "erp5.portal_type", function () {
       return pickle(obj);
     });
@@ -314,7 +346,7 @@
               path = path.replace(scope.delete_path_part, "");
             }
             path = path.split("/").join("_").split(".").join("_");
-            if (path[path.length-1] === "_") {
+            if (path[path.length - 1] === "_") {
               path = path + "*";
             }
             context._template_path_list[context._options.id_prefix + path] = 1;
