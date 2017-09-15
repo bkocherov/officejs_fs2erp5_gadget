@@ -74,7 +74,10 @@
       .push(function () {
         return jIO.util.ajax({
           type: "GET",
-          url: storage._origin_url + storage._prefix + storage._manifest
+          url: storage._origin_url + storage._prefix + storage._manifest,
+          headers: {
+            'Cache-Control': 'no-cache'
+          }
         });
       })
       .push(function (response) {
