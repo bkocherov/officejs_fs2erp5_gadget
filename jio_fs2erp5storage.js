@@ -444,7 +444,7 @@
               case "appcache":
                 path = "web_page_module";
                 xmldoc.portal_type = "Web Manifest";
-                xmldoc.content_type = "application/json";
+                xmldoc.content_type = "text/cache-manifest";
                 xmldoc.text_content = id;
                 break;
               case "png":
