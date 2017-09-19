@@ -228,6 +228,16 @@
     }, {header: true, indent: '  '});
   }
 
+  function check_excluded(path, excluded_paths) {
+    var i;
+    for (i = 0; i < excluded_paths.length; i += 1) {
+      if (path.startsWith(excluded_paths[i])) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   function Fs2Erp5Storage(spec) {
     this._document = spec.document;
     this._sub_storage = jIO.createJIO(spec.sub_storage);
@@ -332,10 +342,15 @@
           '/PathTemplateItem/';
         context._id_dict[context.path_prefix_meta] = bt_folder;
         context._template_path_list = {};
+        context.excluded_paths = context._options.excluded_paths || [];
         scopes = context._options.scopes || {};
         for (i = 0; i < scopes.length; i += 1) {
           size++;
           scope = scopes[i];
+          if (scope.excluded_paths) {
+            context.excluded_paths =
+              context.excluded_paths.concat(scope.excluded_paths);
+          }
           for (x = 0; x < scope.paths.length; x += 1) {
             path = scope.paths[x];
             context._paths[path] = scope;
@@ -372,9 +387,9 @@
           if (
             result.hasOwnProperty(id) &&
             id !== "/" &&
-            !id.startsWith("http") &&
-            !id.startsWith("erp5_/") && //rmove meta of package
-            !id.startsWith("assets/") // remove github added assets
+            !id.startsWith("erp5_/") && //remove meta of package
+            !id.startsWith("assets/") && // remove github added assets
+            check_excluded(id, context.excluded_paths)
           ) {
             xmldoc = {};
             last_index = id.lastIndexOf("/") + 1;
