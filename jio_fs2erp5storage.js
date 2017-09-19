@@ -459,7 +459,8 @@
               case "appcache":
                 path = "web_page_module";
                 xmldoc.portal_type = "Web Manifest";
-                xmldoc.content_type = "text/cache-manifest";
+                // "text/cache-manifest" not supported in erp5;
+                xmldoc.content_type = null;
                 xmldoc.text_content = id;
                 break;
               case "png":
@@ -536,7 +537,7 @@
           id: context._options.id_prefix + context._options.name + "_appcache",
           default_reference: context._options.name + ".appcache",
           portal_type: "Web Manifest",
-          content_type: "application/json",
+          content_type: null, // "text/cache-manifest
           workflow_history: {
             document_publication_workflow: {
               action: "publish_alive",
