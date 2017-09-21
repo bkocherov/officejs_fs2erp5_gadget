@@ -506,15 +506,24 @@
               document_publication_wfl.action = "publish";
               document_publication_wfl.validation_state = "published";
             }
-            if (!bt_links.hasOwnProperty(path)) {
-              bt_links[path] = 1;
-              for (i in context._template_path_list) {
-                if (context._template_path_list.hasOwnProperty(i)) {
-                  template_path_list.push(path + '/' + i);
+            path = path + "/";
+            for (i in context._template_path_list) {
+              if (context._template_path_list.hasOwnProperty(i) &&
+                !bt_links.hasOwnProperty(path + i)) {
+                if (i.substring(i.length - 1) === "*") {
+                  if (xmldoc.id.startsWith(i.substring(0, i.length - 1))) {
+                    template_path_list.push(path + i);
+                    bt_links[path + i] = 1;
+                  }
+                } else {
+                  if (i === xmldoc.id) {
+                    template_path_list.push(path + i);
+                    bt_links[path + i] = 1;
+                  }
                 }
               }
             }
-            path = context.path_prefix_file + path + "/";
+            path = context.path_prefix_file + path;
             if (!context._id_dict.hasOwnProperty(path)) {
               context._id_dict[path] = {};
             }
