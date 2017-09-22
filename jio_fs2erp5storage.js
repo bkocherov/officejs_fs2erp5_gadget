@@ -535,12 +535,6 @@
             context._id_dict[path][xmldoc.id + '.xml'] = xmldoc;
           }
         }
-        template_path_list = string2blob(template_path_list.join("\n"));
-        bt_folder.template_path_list = template_path_list;
-        bt_folder.template_keep_workflow_path_list = template_path_list;
-        bt_folder.template_keep_last_workflow_history_only_path_list =
-          template_path_list;
-
         // generate appcache as list of all packaged files
         xmldoc = {
           version: context._options.version,
@@ -560,6 +554,15 @@
         };
         context._id_dict[context.path_prefix_file + "web_page_module/"]
           [xmldoc.id + ".xml"] = string2blob(generateZopeData(xmldoc));
+        template_path_list.push("web_page_module/" + xmldoc.id);
+
+        // create template_path_list meta
+        template_path_list = string2blob(template_path_list.join("\n"));
+        bt_folder.template_path_list = template_path_list;
+        bt_folder.template_keep_workflow_path_list = template_path_list;
+        bt_folder.template_keep_last_workflow_history_only_path_list =
+          template_path_list;
+
       });
   };
 
