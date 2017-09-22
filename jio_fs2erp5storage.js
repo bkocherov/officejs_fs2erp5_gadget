@@ -374,6 +374,7 @@
         add_metafile("version", context._options.version);
         add_metafile("description", context._options.description);
         add_metafile("copyright_list", context._options.authors);
+        add_metafile("dependency_list", context._options.dependencies);
         add_metafile("license", context._options.license);
       })
       .push(function () {
