@@ -6,6 +6,9 @@ into ERP5 bt5 format. ERP5 allows to upload this format as business template.
 1. currently zip is used as exported format, but erp5 bt5 tgz is needed. So repack is needed after export.
 1. deploy jekill hosting pages to lab.nexedi.com .
 
+## You can try it
+https://bkocherov.github.io/officejs_fs2erp5_gadget/
+
 ## Using
 to use this Gadget the following steps should be done:
  1. fork current repository and add `names of exported respositories` in index.html
