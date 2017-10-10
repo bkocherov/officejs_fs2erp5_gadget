@@ -195,7 +195,6 @@
       "Owner"
     ];
     obj._Add_portal_content_Permission = [
-      "Assignee",
       "Assignor",
       "Manager"
     ];
@@ -204,8 +203,6 @@
       "Manager"
     ];
     obj._Modify_portal_content_Permission = [
-      "Assignee",
-      "Assignor",
       "Manager"
     ];
     obj._View_Permission = [
@@ -403,8 +400,8 @@
             }
             xmldoc.version = context._options.version;
             document_publication_wfl = {
-              action: "publish_alive",
-              validation_state: "published_alive"
+              action: "publish",
+              validation_state: "published"
             };
             xmldoc.workflow_history = {
               document_publication_workflow: document_publication_wfl
@@ -479,8 +476,6 @@
                   default:
                     xmldoc.content_type = "image/" + ext;
                 }
-                document_publication_wfl.action = "publish";
-                document_publication_wfl.validation_state = "published";
                 break;
               case "json":
                 xmldoc.content_type = "application/json";
@@ -504,8 +499,6 @@
               xmldoc.portal_type = "File";
               path = "document_module";
               xmldoc.title = filename;
-              document_publication_wfl.action = "publish";
-              document_publication_wfl.validation_state = "published";
             }
             path = path + "/";
             for (i in context._template_path_list) {
@@ -544,8 +537,8 @@
           content_type: null, // "text/cache-manifest
           workflow_history: {
             document_publication_workflow: {
-              action: "publish_alive",
-              validation_state: "published_alive"
+              action: "publish",
+              validation_state: "published"
             }
           },
           text_content: "CACHE MANIFEST\nCACHE:\n" +
