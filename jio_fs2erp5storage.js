@@ -344,6 +344,8 @@
         for (i = 0; i < scopes.length; i += 1) {
           size++;
           scope = scopes[i];
+          scope.id_prefix = scope.id_prefix || context._options.id_prefix;
+          scope.prefix = scope.prefix || "";
           if (scope.excluded_paths) {
             context.excluded_paths =
               context.excluded_paths.concat(scope.excluded_paths);
@@ -358,10 +360,10 @@
               path = path.replace(scope.delete_path_part, "");
             }
             path = path.split("/").join("_").split(".").join("_");
-            if (path[path.length - 1] === "_") {
+            if (['_', '.'].indexOf(path[path.length - 1]) >= 0) {
               path = path + "*";
             }
-            context._template_path_list[context._options.id_prefix + path] = 1;
+            context._template_path_list[scope.id_prefix + path] = 1;
           }
         }
         if (size === 0) {
@@ -380,7 +382,8 @@
       .push(function (result) {
         var id, path, last_index, filename, ext, i, size,
           xmldoc, bt_links = {}, template_path_list = [],
-          generated_appcache = [], document_publication_wfl;
+          generated_appcache = [], document_publication_wfl,
+          id_prefix;
         for (id in result) {
           if (
             result.hasOwnProperty(id) &&
@@ -408,6 +411,7 @@
             };
             path = path + filename;
             size = 0;
+            id_prefix = "";
             for (i in context._paths) {
               if (context._paths.hasOwnProperty(i)) {
                 size++;
@@ -418,6 +422,7 @@
                   if (context._paths[i].prefix) {
                     path = context._paths[i].prefix + path;
                   }
+                  id_prefix = context._paths[i].id_prefix;
                   xmldoc.default_reference = path;
                   break;
                 }
@@ -428,10 +433,10 @@
             } else {
               xmldoc.default_reference = path;
             }
-            if (!context._options.id_prefix && path === "index.html") {
+            if (!id_prefix && path === "index.html") {
               continue;
             }
-            xmldoc.id = context._options.id_prefix + path;
+            xmldoc.id = id_prefix + path;
             xmldoc.id = xmldoc.id.split("/").join("_").split(".").join("_");
 
             ext = filename.substring(filename.lastIndexOf('.') + 1);
