@@ -185,38 +185,48 @@
       };
     }
 
-    obj._Access_contents_information_Permission = [
-      "Anonymous",
-      "Assignee",
-      "Assignor",
-      "Associate",
-      "Auditor",
-      "Manager",
-      "Owner"
-    ];
-    obj._Add_portal_content_Permission = [
-      "Assignor",
-      "Manager"
-    ];
-    obj._Change_local_roles_Permission = [
-      "Assignor",
-      "Manager"
-    ];
-    obj._Modify_portal_content_Permission = [
-      "Manager"
-    ];
-    obj._View_Permission = [
-      "Anonymous",
-      "Assignee",
-      "Assignor",
-      "Associate",
-      "Auditor",
-      "Manager",
-      "Owner"
-    ];
-    add_record(obj.portal_type, "erp5.portal_type", function () {
-      return pickle(obj);
-    });
+    if (obj.portal_type) {
+      obj._Access_contents_information_Permission = [
+        "Anonymous",
+        "Assignee",
+        "Assignor",
+        "Associate",
+        "Auditor",
+        "Manager",
+        "Owner"
+      ];
+      obj._Add_portal_content_Permission = [
+        "Assignor",
+        "Manager"
+      ];
+      obj._Change_local_roles_Permission = [
+        "Assignor",
+        "Manager"
+      ];
+      obj._Modify_portal_content_Permission = [
+        "Manager"
+      ];
+      obj._View_Permission = [
+        "Anonymous",
+        "Assignee",
+        "Assignor",
+        "Associate",
+        "Auditor",
+        "Manager",
+        "Owner"
+      ];
+      add_record(obj.portal_type, "erp5.portal_type", function () {
+        return pickle(obj);
+      });
+    } else if (Array.isArray(obj._objects)) {
+      add_record("Folder", "OFS.Folder", function () {
+        return pickle(obj);
+      });
+    } else {
+      add_record("File", "OFS.Image", function () {
+        return pickle(obj);
+      });
+    }
     while (tasks.length > 0) {
       records.push(tasks.shift()());
     }
@@ -240,6 +250,204 @@
     this._sub_storage = jIO.createJIO(spec.sub_storage);
     this._id_dict = {};
     this._paths = {};
+  }
+
+  function ModuleGenerator(context, orig_id, id_prefix, web_path, filename) {
+    var xmldoc = {}, ext, i, path;
+    xmldoc.default_reference = web_path;
+    xmldoc.version = context._options.version;
+    xmldoc.workflow_history = {
+      document_publication_workflow: {
+        action: "publish",
+        validation_state: "published"
+      }
+    };
+    xmldoc.id = id_prefix + web_path;
+    xmldoc.id = xmldoc.id.split("/").join("_").split(".").join("_");
+
+    ext = filename.substring(filename.lastIndexOf('.') + 1);
+    // TODO: all filetype support
+    switch (ext) {
+      case "template":
+      case "html":
+      case "htm":
+        path = "web_page_module";
+        xmldoc.portal_type = "Web Page";
+        xmldoc.content_type = "text/html";
+        break;
+      case "js":
+        path = "web_page_module";
+        xmldoc.portal_type = "Web Script";
+        xmldoc.content_type = "text/javascript";
+        break;
+      case "css":
+        path = "web_page_module";
+        xmldoc.portal_type = "Web Style";
+        xmldoc.content_type = "text/css";
+        break;
+      case "appcache":
+        path = "web_page_module";
+        xmldoc.portal_type = "Web Manifest";
+        // "text/cache-manifest" not supported in erp5;
+        xmldoc.content_type = null;
+        xmldoc.text_content = orig_id;
+        break;
+      case "png":
+      case "gif":
+      case "jpg":
+      case "svg":
+        path = "image_module";
+        xmldoc.portal_type = "Image";
+        xmldoc.title = filename;
+        xmldoc.filename = filename;
+        switch (ext) {
+          case "svg":
+            xmldoc.content_type = "image/svg+xml";
+            break;
+          default:
+            xmldoc.content_type = "image/" + ext;
+        }
+        break;
+      case "json":
+        xmldoc.content_type = "application/json";
+        break;
+      case "eot":
+        xmldoc.content_type = "application/vnd.ms-fontobject";
+        break;
+      case "ttf":
+        xmldoc.content_type = "font/truetype";
+        break;
+      case "woff":
+        xmldoc.content_type = "application/x-font-woff";
+        break;
+      case "woff2":
+        xmldoc.content_type = "font/woff2";
+        break;
+      default:
+        return;
+    }
+    if (!xmldoc.portal_type) {
+      xmldoc.portal_type = "File";
+      path = "document_module";
+      xmldoc.title = filename;
+    }
+    path = path + "/";
+    for (i in context._template_path_list) {
+      if (context._template_path_list.hasOwnProperty(i) &&
+        context._template_path_list_z.indexOf(path + i) < 0) {
+        if (i.substring(i.length - 1) === "*") {
+          if (xmldoc.id.startsWith(i.substring(0, i.length - 1))) {
+            context._template_path_list_z.push(path + i);
+          }
+        } else {
+          if (i === xmldoc.id) {
+            context._template_path_list_z.push(path + i);
+          }
+        }
+      }
+    }
+    path = context.path_prefix_file + path;
+    if (!context._id_dict.hasOwnProperty(path)) {
+      context._id_dict[path] = {};
+    }
+    if (!xmldoc.text_content) {
+      context._id_dict[path][xmldoc.id + '.' + ext] = orig_id;
+    }
+    context._id_dict[path][xmldoc.id + '.xml'] = xmldoc;
+    return true;
+  }
+
+  function PortalSkinFolderGenerator(context, path) {
+    var path_arr = path.split('/'),
+      i, path_old, id;
+    if (path_arr.length > 1) {
+      path_old = context.path_prefix_file;
+      if (!context._id_dict.hasOwnProperty(path_old)) {
+        context._id_dict[path_old] = {};
+      }
+      for (i=1; i < path_arr.length; i++) {
+        path = context.path_prefix_file + path_arr.slice(0, i).join('/') + "/";
+        if (!context._id_dict.hasOwnProperty(path)) {
+          id = path_arr[i-1];
+          context._id_dict[path] = {};
+          context._id_dict[path_old][id + ".xml"] = {
+            _objects: [],
+            id: id,
+            title: ""
+          };
+        }
+        path_old = path;
+      }
+
+    }
+  }
+
+  function PortalSkinGenerator(context, orig_id, id_prefix, web_path, filename) {
+    var ext, path, xmldoc = {
+      _Cacheable__manager_id: "http_cache",
+      __name__: filename,
+      precondition: "",
+      title: ""
+    };
+    ext = filename.substring(filename.lastIndexOf('.') + 1);
+    // TODO: all filetype support
+    switch (ext) {
+      case "template":
+      case "html":
+      case "htm":
+        xmldoc.content_type = "text/html";
+        break;
+      case "js":
+        xmldoc.content_type = "text/javascript";
+        break;
+      case "css":
+        xmldoc.content_type = "text/css";
+        break;
+      case "appcache":
+        xmldoc.content_type = "text/cache-manifest";
+        xmldoc._Cacheable__manager_id = null;
+        break;
+      case "png":
+      case "gif":
+      case "jpg":
+      case "svg":
+        xmldoc.filename = filename;
+        switch (ext) {
+          case "svg":
+            xmldoc.content_type = "image/svg+xml";
+            break;
+          default:
+            xmldoc.content_type = "image/" + ext;
+        }
+        break;
+      case "json":
+        xmldoc.content_type = "application/json";
+        break;
+      case "eot":
+        xmldoc.content_type = "application/vnd.ms-fontobject";
+        break;
+      case "ttf":
+        xmldoc.content_type = "font/truetype";
+        break;
+      case "woff":
+        xmldoc.content_type = "application/x-font-woff";
+        break;
+      case "woff2":
+        xmldoc.content_type = "font/woff2";
+        break;
+      default:
+        xmldoc.content_type = "application/octet-stream";
+        ext = "bin";
+        return;
+    }
+    path = web_path.substring(0, web_path.length - filename.length);
+    PortalSkinFolderGenerator(context, path);
+    path = context.path_prefix_file + path;
+    if (!xmldoc.text_content) {
+      context._id_dict[path][filename + '.' + ext] = orig_id;
+    }
+    context._id_dict[path][filename + '.xml'] = xmldoc;
+    return true;
   }
 
   Fs2Erp5Storage.prototype.get = function (url) {
@@ -334,9 +542,21 @@
         context._options = response.target.response;
         context._options.id_prefix = context._options.id_prefix || "";
         context._options.version = context._options.version || "001";
+        context._options.appcache = context._options.appcache ||
+          context._options.id_prefix + context._options.name;
         context.path_prefix_meta = '/' + context._options.name + '/bt/';
-        context.path_prefix_file = '/' + context._options.name +
-          '/PathTemplateItem/';
+        if (context._options.portal_skin) {
+          context.path_prefix_file = '/' + context._options.name +
+            '/SkinTemplateItem/portal_skins/';
+          PortalSkinFolderGenerator(context, context._options.portal_skin +
+            '/');
+          context.path_prefix_file = context.path_prefix_file +
+            context._options.portal_skin + '/';
+          add_metafile("template_skin_id_list", context._options.portal_skin);
+        } else {
+          context.path_prefix_file = '/' + context._options.name +
+            '/PathTemplateItem/';
+        }
         context._id_dict[context.path_prefix_meta] = bt_folder;
         context._template_path_list = {};
         context.excluded_paths = context._options.excluded_paths || [];
@@ -380,10 +600,10 @@
         return context._sub_storage.allAttachments(context._document);
       })
       .push(function (result) {
-        var id, path, last_index, filename, ext, i, size,
-          xmldoc, bt_links = {}, template_path_list = [],
-          generated_appcache = [], document_publication_wfl,
-          id_prefix;
+        var id, path, last_index, filename, i, size,
+          xmldoc, generated_appcache = [], id_prefix,
+          template_path_list;
+        context._template_path_list_z = [];
         for (id in result) {
           if (
             result.hasOwnProperty(id) &&
@@ -392,7 +612,6 @@
             !id.startsWith("assets/") && // remove github added assets
             check_excluded(id, context.excluded_paths)
           ) {
-            xmldoc = {};
             last_index = id.lastIndexOf("/") + 1;
             if (last_index === id.length) {
               path = id || "/";
@@ -401,14 +620,7 @@
               path = id.substring(0, last_index);
               filename = id.substring(last_index);
             }
-            xmldoc.version = context._options.version;
-            document_publication_wfl = {
-              action: "publish",
-              validation_state: "published"
-            };
-            xmldoc.workflow_history = {
-              document_publication_workflow: document_publication_wfl
-            };
+
             path = path + filename;
             size = 0;
             id_prefix = "";
@@ -423,143 +635,77 @@
                     path = context._paths[i].prefix + path;
                   }
                   id_prefix = context._paths[i].id_prefix;
-                  xmldoc.default_reference = path;
+                  size = -1;
                   break;
                 }
               }
             }
-            if (size > 0 && !xmldoc.default_reference) {
-              continue;
-            } else {
-              xmldoc.default_reference = path;
-            }
             if (!id_prefix && path === "index.html") {
               continue;
             }
-            xmldoc.id = id_prefix + path;
-            xmldoc.id = xmldoc.id.split("/").join("_").split(".").join("_");
+            if (size > 0) {
+              continue;
+            }
 
-            ext = filename.substring(filename.lastIndexOf('.') + 1);
-            // TODO: all filetype support
-            switch (ext) {
-              case "template":
-              case "html":
-              case "htm":
-                path = "web_page_module";
-                xmldoc.portal_type = "Web Page";
-                xmldoc.content_type = "text/html";
-                break;
-              case "js":
-                path = "web_page_module";
-                xmldoc.portal_type = "Web Script";
-                xmldoc.content_type = "text/javascript";
-                break;
-              case "css":
-                path = "web_page_module";
-                xmldoc.portal_type = "Web Style";
-                xmldoc.content_type = "text/css";
-                break;
-              case "appcache":
-                path = "web_page_module";
-                xmldoc.portal_type = "Web Manifest";
-                // "text/cache-manifest" not supported in erp5;
-                xmldoc.content_type = null;
-                xmldoc.text_content = id;
-                break;
-              case "png":
-              case "gif":
-              case "jpg":
-              case "svg":
-                path = "image_module";
-                xmldoc.portal_type = "Image";
-                xmldoc.title = filename;
-                xmldoc.filename = filename;
-                switch (ext) {
-                  case "svg":
-                    xmldoc.content_type = "image/svg+xml";
-                    break;
-                  default:
-                    xmldoc.content_type = "image/" + ext;
-                }
-                break;
-              case "json":
-                xmldoc.content_type = "application/json";
-                break;
-              case "eot":
-                xmldoc.content_type = "application/vnd.ms-fontobject";
-                break;
-              case "ttf":
-                xmldoc.content_type = "font/truetype";
-                break;
-              case "woff":
-                xmldoc.content_type = "application/x-font-woff";
-                break;
-              case "woff2":
-                xmldoc.content_type = "font/woff2";
-                break;
-              default:
+            if (context._options.portal_skin) {
+              if (!PortalSkinGenerator(context, id, id_prefix, path, filename)) {
                 continue;
-            }
-            if (!xmldoc.portal_type) {
-              xmldoc.portal_type = "File";
-              path = "document_module";
-              xmldoc.title = filename;
-            }
-            path = path + "/";
-            for (i in context._template_path_list) {
-              if (context._template_path_list.hasOwnProperty(i) &&
-                !bt_links.hasOwnProperty(path + i)) {
-                if (i.substring(i.length - 1) === "*") {
-                  if (xmldoc.id.startsWith(i.substring(0, i.length - 1))) {
-                    template_path_list.push(path + i);
-                    bt_links[path + i] = 1;
-                  }
-                } else {
-                  if (i === xmldoc.id) {
-                    template_path_list.push(path + i);
-                    bt_links[path + i] = 1;
-                  }
-                }
+              }
+            } else {
+              if (!ModuleGenerator(context, id, id_prefix, path, filename)) {
+                continue;
               }
             }
-            path = context.path_prefix_file + path;
-            if (!context._id_dict.hasOwnProperty(path)) {
-              context._id_dict[path] = {};
-            }
-            if (!xmldoc.text_content) {
-              context._id_dict[path][xmldoc.id + '.' + ext] = id;
-            }
-            generated_appcache.push(xmldoc.default_reference);
-            context._id_dict[path][xmldoc.id + '.xml'] = xmldoc;
+            generated_appcache.push(path);
           }
         }
-        // generate appcache as list of all packaged files
-        xmldoc = {
-          version: context._options.version,
-          id: context._options.id_prefix + context._options.name + "_appcache",
-          default_reference: context._options.name + ".appcache",
-          portal_type: "Web Manifest",
-          content_type: null, // "text/cache-manifest
-          workflow_history: {
-            document_publication_workflow: {
-              action: "publish",
-              validation_state: "published"
-            }
-          },
-          text_content: "CACHE MANIFEST\nCACHE:\n" +
-          "#autogenerated for: " + context._options.name + '\n' +
-          generated_appcache.join("\n") + "\nNETWORK:\n*"
-        };
-        context._id_dict[context.path_prefix_file + "web_page_module/"]
-          [xmldoc.id + ".xml"] = string2blob(generateZopeData(xmldoc));
-        template_path_list.push("web_page_module/" + xmldoc.id);
 
-        // create template_path_list meta
-        template_path_list = string2blob(template_path_list.join("\n"));
-        bt_folder.template_path_list = template_path_list;
-        bt_folder.template_keep_workflow_path_list = template_path_list;
-        bt_folder.template_keep_last_workflow_history_only_path_list =
-          template_path_list;
+        if (context._options.portal_skin) {
+          filename = context._options.appcache + '.appcache';
+          context._id_dict[context.path_prefix_file]
+            [filename + ".appcache"] =
+            string2blob("CACHE MANIFEST\nCACHE:\n" +
+              "#autogenerated for: " + context._options.name + '\n' +
+              generated_appcache.join("\n") + "\nNETWORK:\n*");
+          xmldoc = {
+            _Cacheable__manager_id: null,
+            __name__: filename,
+            precondition: "",
+            content_type: "text/cache-manifest",
+            title: ""
+          };
+          context._id_dict[context.path_prefix_file]
+            [filename + ".xml"] = string2blob(generateZopeData(xmldoc));
+        } else {
+          template_path_list = context._template_path_list_z;
+          // generate appcache as list of all packaged files
+          xmldoc = {
+            version: context._options.version,
+            id: context._options.appcache + "_appcache",
+            default_reference: context._options.appcache + '.appcache',
+            portal_type: "Web Manifest",
+            content_type: null, // "text/cache-manifest
+            workflow_history: {
+              document_publication_workflow: {
+                action: "publish",
+                validation_state: "published"
+              }
+            },
+            text_content: "CACHE MANIFEST\nCACHE:\n" +
+            "#autogenerated for: " + context._options.name + '\n' +
+            generated_appcache.join("\n") + "\nNETWORK:\n*"
+          };
+          context._id_dict[context.path_prefix_file + "web_page_module/"]
+            [xmldoc.id + ".xml"] = string2blob(generateZopeData(xmldoc));
+          template_path_list.push("web_page_module/" + xmldoc.id);
+
+          // create template_path_list meta
+          template_path_list = string2blob(template_path_list.join("\n"));
+          bt_folder.template_path_list = template_path_list;
+          bt_folder.template_keep_workflow_path_list = template_path_list;
+          bt_folder.template_keep_last_workflow_history_only_path_list =
+            template_path_list;
+        }
 
       });
   };
